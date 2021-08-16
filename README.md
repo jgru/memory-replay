@@ -23,6 +23,7 @@ into issues.
 
 # 1. Install dependencies
 ----------------------------------
+```
 sudo apt install git build-essential libfdt-dev libpixman-1-dev libssl-dev \
      libsdl1.2-dev autoconf libtool xtightvncviewer tightvncserver x11vnc \
      libsdl1.2-dev uuid-runtime uuid-dev bridge-utils python3-dev liblzma-dev \
@@ -34,17 +35,18 @@ sudo apt install git build-essential libfdt-dev libpixman-1-dev libssl-dev \
      cabextract libglib2.0-dev autoconf automake libtool libjson-c-dev \
      libfuse-dev liblzma-dev autoconf-archive kpartx python3-pip gcc-7 \
      libsystemd-dev cmake snap
-
+```
 # 2. Grab the project and all submodules
 ----------------------------------
+```
 git clone git://xenbits.xen.org/people/tklengyel/memory-replay.git
 cd memory-replay
 git submodule update --init
-
+```
 # 3. Compile & Install Xen
 ----------------------------------
 There had been some compiler issues with newer gcc's so set your gcc version to GCC-7:
-
+```
 sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-7 7
 
 Make sure the pci include folder exists at `/usr/include/pci`. In case it doesn't create a symbolic link to where it's installed at:
@@ -72,22 +74,22 @@ systemctl enable xenconsoled.service
 echo "GRUB_CMDLINE_XEN_DEFAULT=\"console=vga hap_1gb=false hap_2mb=false\""
 update-grub
 reboot
-
+```
 Make sure to pick the Xen entry in GRUB when booting. You can verify you booted
 into Xen correctly by running `xen-detect`.
 
 ## 3.b Booting from UEFI
 
 If Xen doesn't boot from GRUB you can try to boot it from UEFI directly:
-
+```
 mkdir -p /boot/efi/EFI/xen
 cp /usr/lib/efi/xen.efi /boot/efi/EFI/xen
 cp /boot/vmlinuz /boot/efi/EFI/xen
 cp /boot/initrd.img /boot/efi/EFI/xen
-
+```
 Gather your kernel boot command line from /proc/cmdline & paste the following
 into /boot/efi/EFI/xen/xen.cfg:
-
+```
     [global]
     default=xen
 
@@ -95,12 +97,12 @@ into /boot/efi/EFI/xen/xen.cfg:
     options=console=vga hap_1gb=false hap_2mb=false
     kernel=vmlinuz console=hvc0 earlyprintk=xen <KERNEL'S BOOT COMMAND LINE>
     ramdisk=initrd.img
-
+```
 Create an EFI boot entry for it:
-
+```
 efibootmgr -c -d /dev/sda -p 1 -w -L "Xen" -l "\EFI\xen\xen.efi"
 reboot
-
+```
 You may want to use the `-C` option above if you are on a remote system so you
 can set only the next-boot to try Xen. This is helpful in case the system can't
 boot Xen and you don't have remote KVM to avoid losing access in case Xen can't
@@ -110,17 +112,18 @@ boot Xen only on the next reboot.
 # 4. Create VM disk image
 ----------------------------------
 20GB is usually sufficient but if you are planning to compile the kernel from source you will want to increase that.
-
+```
 dd if=/dev/zero of=vmdisk.img bs=1G count=20 
-
+```
 # 5. Setup networking
 ----------------------------------
+```
 sudo brctl addbr xenbr0
 sudo ip addr add 10.0.0.1/24 dev xenbr0
 sudo ip link set xenbr0 up
 sudo echo 1 > /proc/sys/net/ipv4/ip_forward
 sudo iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
-
+```
 You might also want to save this as a script or add it to /etc/rc.local. See
 https://www.linuxbabe.com/linux-server/how-to-enable-etcrc-local-with-systemd
 for more details.
@@ -128,7 +131,7 @@ for more details.
 # 6. Create VM
 ----------------------------------
 Paste the following as your domain config, for example into `debian.cfg`, tune it as you see fit. It's important the VM has only a single vCPU.
-
+```
     name="debian"
     builder="hvm"
     vcpus=1
@@ -147,22 +150,22 @@ Paste the following as your domain config, for example into `debian.cfg`, tune i
     # Make sure to update the paths below!
     disk=['file:/path/to/vmdisk.img,xvda,w',
           'file:/path/to/debian.iso,xvdc:cdrom,r']
-
+```
 Start the VM with:
-
+```
 sudo xl create -V debian.cfg
-
+```
 Follow the installation instructions in the VNC session. Configure the network
 manually to 10.0.0.2 with a default route via 10.0.0.1
 
 # 7. Grab the kernel's debug symbols & headers
 ----------------------------------
 On Debian systems you can install everything right away
-
+```
 su -
 apt update && sudo apt install linux-image-$(uname -r)-dbg \
     linux-headers-$(uname -r)
-
+```
 On Ubuntu to install the Kernel debug symbols please follow the following
 tutorial: https://wiki.ubuntu.com/Debug%20Symbol%20Packages
 
@@ -172,20 +175,20 @@ From the VM copy `/usr/lib/debug/boot/vmlinux-$(uname -r)` and
 # 8. Build the kernel's debug JSON profile
 ---------------------------------
 Change the paths to match your setup
-
+```
 sudo snap install --classic go
 cd dwarf2json
 go build
 ./dwarf2json linux --elf /path/to/vmlinux --system-map /path/to/System.map \
     > ~/debian.json
 cd ..
-
+```
 # 9. Compile & install Capstone
 ---------------------------------
 We use a more recent version from the submodule (4.0.2) then what most distros
 ship by default. If your distro ships a newer version you could also just
 install `libcapstone-dev`.
-
+```
 cd capstone
 mkdir build
 cd build
@@ -193,46 +196,50 @@ cmake ..
 make
 make install
 cd ../..
-
+```
 # 10. Compile & install LibVMI
 ---------------------------------
+```
 cd libvmi
 autoreconf -vif
 ./configure --disable-kvm --disable-bareflank --disable-file
 make -j4
 sudo make install
 cd ..
-
+```
 Test that base VMI works with:
+```
 sudo vmi-process-list --name debian --json ~/debian.json
-
+```
 # 11. Compile shredder
 ---------------------------------
+```
 autoreconf -vif
 ./configure
 make -j4
-
+```
 # 12. Use gdb to add the harness breakpoints to the target process
 ---------------------------------
 You can use a standard debugger to place the start and end harness breakpoints
 to your target process. Or you can also add it via inline assembly:
-
+```
 static inline void harness(void)
 {
     asm ("int3");
 }
-
+```
 You can insert the harness before and after the code segment you want to fuzz:
-
+```
     harness();
     // code to test here
     harness();
-
+```
 # 13. Start fuzzing 
 ---------------------------------
 Start running shredder:
+```
 sudo ./shredder --domain debian --json-path /path/to/kernel.json --fuzz
-
+```
 Execute the target application in the VM to start the fuzzing session.
 
 ---------------------------------
